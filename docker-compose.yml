@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # 1. O serviço do Backend (Python/FastAPI)
+  backend:
+    build:
+      context: .  # Constrói a imagem a partir do Dockerfile no diretório atual
+    container_name: emotion-api
+    ports:
+      - "8000:8000" # Mapeia a porta 8000 do host para a 8000 do container
+    volumes:
+      - .:/app      # Monta o diretório local na pasta /app do container
+                    # (Ótimo para desenvolvimento, o código atualiza sem rebuild)
+    environment:
+      # Passa a URL do postgres para a API (usuário, senha, dbname)
+      - DATABASE_URL=postgresql://user:password@postgres:5432/emotiondb
+    depends_on:
+      - postgres    # Garante que o 'postgres' inicie antes do 'backend'
+    restart: always
+
+  # 2. O serviço do Banco de Dados (PostgreSQL)
+  postgres:
+    image: postgres:15-alpine # Imagem oficial do PostgreSQL (versão leve)
+    container_name: emotion-db-pg
+    ports:
+      - "5432:5432" # Mapeia a porta do PostgreSQL (para debug, se necessário)
+    environment:
+      # Estas variáveis criam o usuário e o banco na primeira inicialização
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=emotiondb
+    volumes:
+      - postgres-data:/var/lib/postgresql/data # Persiste os dados do banco
+    restart: always
+
+# Define o volume nomeado para persistir os dados do PostgreSQL
+volumes:
+  postgres-data:
+    driver: local

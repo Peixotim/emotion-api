@@ -1,0 +1,18 @@
+# Framework da API
+fastapi
+uvicorn[standard]
+pydantic
+
+# Análise de Imagem
+deepface
+opencv-python-headless
+
+# 'python-multipart' é necessário para uploads de formulário, mas não para JSON (bom ter)
+python-multipart
+
+# Banco de Dados (PostgreSQL)
+sqlalchemy
+psycopg2-binary
+
+# Agendador para limpeza de dados (TTL)
+apscheduler
