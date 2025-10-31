@@ -1,4 +1,4 @@
-# Framework da API
+# Framework da API e Servidor
 fastapi
 uvicorn[standard]
 pydantic
@@ -6,13 +6,12 @@ pydantic
 # Análise de Imagem
 deepface
 opencv-python-headless
-
-# 'python-multipart' é necessário para uploads de formulário, mas não para JSON (bom ter)
 python-multipart
+tf-keras
 
-# Banco de Dados (PostgreSQL)
+# Banco de Dados (PostgreSQL e ORM)
 sqlalchemy
 psycopg2-binary
 
-# Agendador para limpeza de dados (TTL)
+# Agendador de Tarefas
 apscheduler

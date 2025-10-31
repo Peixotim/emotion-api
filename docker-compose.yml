@@ -1,39 +1,45 @@
-version: '3.8'
-
+# Define a versão do Docker Compose (opcional nas versões mais recentes)
 services:
-  # 1. O serviço do Backend (Python/FastAPI)
+  # Serviço 1: O backend da sua aplicação
   backend:
     build:
-      context: .  # Constrói a imagem a partir do Dockerfile no diretório atual
+      context: .  # Constrói a imagem usando o Dockerfile no diretório atual
     container_name: emotion-api
     ports:
-      - "8000:8000" # Mapeia a porta 8000 do host para a 8000 do container
+      # Mapeia a porta 8000 do seu computador (host) para a porta 8000 do container
+      - "8000:8000"
     volumes:
-      - .:/app      # Monta o diretório local na pasta /app do container
-                    # (Ótimo para desenvolvimento, o código atualiza sem rebuild)
+      # Monta o diretório atual no diretório /app do container.
+      # Isso permite que você edite o código e veja as mudanças sem precisar reconstruir a imagem (hot-reloading).
+      - .:/app
     environment:
-      # Passa a URL do postgres para a API (usuário, senha, dbname)
+      # Passa a URL de conexão do banco de dados como uma variável de ambiente para a aplicação Python.
+      # 'postgres' é o nome do serviço do banco de dados abaixo.
       - DATABASE_URL=postgresql://user:password@postgres:5432/emotiondb
     depends_on:
-      - postgres    # Garante que o 'postgres' inicie antes do 'backend'
-    restart: always
+      # Garante que o serviço 'postgres' inicie antes do serviço 'backend'.
+      - postgres
+    restart: always # Reinicia o container automaticamente se ele parar.
 
-  # 2. O serviço do Banco de Dados (PostgreSQL)
+  # Serviço 2: O banco de dados PostgreSQL
   postgres:
-    image: postgres:15-alpine # Imagem oficial do PostgreSQL (versão leve)
+    image: postgres:15-alpine # Usa a imagem oficial e leve do PostgreSQL 15.
     container_name: emotion-db-pg
     ports:
-      - "5432:5432" # Mapeia a porta do PostgreSQL (para debug, se necessário)
+      # Mapeia a porta 5432 do seu computador para a porta 5432 do container (para acesso direto ao DB, se necessário).
+      - "5434:5432"
     environment:
-      # Estas variáveis criam o usuário e o banco na primeira inicialização
+      # Define as credenciais e o nome do banco de dados que serão criados na primeira inicialização.
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
       - POSTGRES_DB=emotiondb
     volumes:
-      - postgres-data:/var/lib/postgresql/data # Persiste os dados do banco
+      # Persiste os dados do banco de dados em um volume nomeado.
+      # Isso garante que seus dados não sejam perdidos ao parar ou reiniciar os containers.
+      - postgres-data:/var/lib/postgresql/data
     restart: always
 
-# Define o volume nomeado para persistir os dados do PostgreSQL
+# Define o volume nomeado para persistir os dados do PostgreSQL.
 volumes:
   postgres-data:
     driver: local
