@@ -18,7 +18,6 @@ from sqlalchemy import create_engine, Column, String, DateTime, JSON, Integer, f
 from sqlalchemy.orm import sessionmaker, Session, DeclarativeBase
 
 # --- Configuração de Logging ---
-# Configuração básica para garantir que os logs sejam formatados e exibidos.
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -31,25 +30,21 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-# REFAKTOR: Uso da sintaxe moderna do SQLAlchemy 2.0 para a Base declarativa.
 class Base(DeclarativeBase):
     pass
 
 
 # --- Modelos de Dados (Pydantic para validação da API) ---
 class ImagePayload(BaseModel):
-    """Modelo para o corpo da requisição de análise de emoção."""
     session_uuid: str = Field(..., description="O UUID da sessão do usuário.")
     image_base64: str = Field(..., description="O frame do vídeo em formato string base64.")
 
 
 class SessionResponse(BaseModel):
-    """Modelo para a resposta da criação de sessão."""
     session_uuid: str
 
 
 class EmotionAnalysisResponse(BaseModel):
-    """Modelo para a resposta da análise de emoção."""
     dominant_emotion: str
     emotions: Dict[str, float]
 
@@ -75,7 +70,6 @@ class EmotionLog(Base):
 
 # --- Lógica de Limpeza de Dados ---
 def cleanup_old_emotions():
-    """Remove registros de emoções com mais de 30 dias."""
     logger.info("Executando a tarefa de limpeza de emoções antigas...")
     db = SessionLocal()
     try:
@@ -100,7 +94,6 @@ scheduler = AsyncIOScheduler(timezone="UTC")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Gerencia eventos de inicialização e desligamento da API."""
     logger.info("Iniciando a API...")
     try:
         Base.metadata.create_all(bind=engine)
@@ -130,7 +123,6 @@ app = FastAPI(
 
 # --- Dependência de Sessão do Banco de Dados ---
 def get_db():
-    """Gera uma sessão de banco de dados por requisição."""
     db = SessionLocal()
     try:
         yield db
@@ -141,7 +133,6 @@ def get_db():
 # --- Configuração de CORS (Cross-Origin Resource Sharing) ---
 app.add_middleware(
     CORSMiddleware,
-    # ATENÇÃO: Em produção, troque "*" pelo domínio do seu frontend, ex: ["https://seu-app.com"]
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
@@ -151,7 +142,6 @@ app.add_middleware(
 
 # --- Funções Auxiliares ---
 def decode_base64_image(base64_str: str) -> np.ndarray | None:
-    """Decodifica uma string base64 para uma imagem OpenCV."""
     try:
         if "," in base64_str:
             _, encoded = base64_str.split(",", 1)
@@ -171,13 +161,11 @@ def decode_base64_image(base64_str: str) -> np.ndarray | None:
 # --- Rotas da API ---
 @app.get("/", summary="Health Check")
 def read_root() -> Dict[str, str]:
-    """Verifica se a API está operacional."""
     return {"status": "API de Análise Emocional (PostgreSQL) está online."}
 
 
 @app.post("/start-session", response_model=SessionResponse, summary="Inicia uma nova sessão")
 def start_session(request: Request, db: Session = Depends(get_db)):
-    """Cria uma nova sessão de usuário e a armazena no banco de dados."""
     session_uuid = str(uuid.uuid4())
     user_ip = request.headers.get("X-Forwarded-For", request.client.host)
 
@@ -185,8 +173,8 @@ def start_session(request: Request, db: Session = Depends(get_db)):
         new_session = SessionInfo(
             session_uuid=session_uuid,
             ip_address=user_ip,
-            country="Desconhecido",  # Placeholder para futura implementação de GeoIP
-            state="Desconhecido"  # Placeholder para futura implementação de GeoIP
+            country="Desconhecido",
+            state="Desconhecido"
         )
         db.add(new_session)
         db.commit()
@@ -200,7 +188,6 @@ def start_session(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/analyze-emotion", response_model=EmotionAnalysisResponse, summary="Analisa a emoção de uma imagem")
 async def analyze_emotion(payload: ImagePayload, db: Session = Depends(get_db)):
-    """Recebe um frame, analisa a emoção e salva o log."""
     img = decode_base64_image(payload.image_base64)
     if img is None:
         raise HTTPException(status_code=400, detail="Imagem base64 inválida ou corrompida.")
@@ -213,7 +200,6 @@ async def analyze_emotion(payload: ImagePayload, db: Session = Depends(get_db)):
             detector_backend='opencv'
         )
 
-        # VERIFICAÇÃO: Garante que o resultado é uma lista e não está vazio.
         if not isinstance(analysis_result, list) or not analysis_result:
             logger.warning(f"DeepFace retornou um resultado inesperado para a sessão {payload.session_uuid}")
             return {"dominant_emotion": "Nenhum rosto detectado", "emotions": {}}
@@ -226,19 +212,26 @@ async def analyze_emotion(payload: ImagePayload, db: Session = Depends(get_db)):
             logger.warning(f"Nenhum rosto detectado na análise para a sessão {payload.session_uuid}")
             return {"dominant_emotion": "Nenhum rosto detectado", "emotions": {}}
 
+        # *** INÍCIO DA CORREÇÃO ***
+        # Converte os valores de np.float32 para float padrão do Python
+        emotions_serializable = {key: float(value) for key, value in emotions.items()}
+        # *** FIM DA CORREÇÃO ***
+
         new_emotion_log = EmotionLog(
             session_uuid=payload.session_uuid,
             dominant_emotion=dominant_emotion,
-            emotions=emotions
+            emotions=emotions_serializable  # <-- Usa o dicionário corrigido
         )
         db.add(new_emotion_log)
         db.commit()
 
-        return EmotionAnalysisResponse(dominant_emotion=dominant_emotion, emotions=emotions)
+        # Retorna o dicionário corrigido para o frontend também
+        return EmotionAnalysisResponse(dominant_emotion=dominant_emotion, emotions=emotions_serializable)
 
     except Exception as e:
         db.rollback()
-        logger.error(f"Erro na análise do DeepFace ou gravação no BD para sessão {payload.session_uuid}: {e}")
+        logger.error(f"Erro na análise do DeepFace ou gravação no BD para sessão {payload.session_uuid}: {e}",
+                     exc_info=True)  # Adicionado exc_info=True para um log mais completo
         raise HTTPException(status_code=500, detail="Erro interno durante a análise da emoção.")
 
 
